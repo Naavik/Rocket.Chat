@@ -34,7 +34,7 @@ const getRoomInfoByAuditParams = async ({
 	users: NonNullable<IUser['username']>[];
 	visitor: ILivechatVisitor['_id'];
 	agent: ILivechatAgent['_id'];
-	userId: string,
+	userId: string;
 }) => {
 	if (rid) {
 		return getValue(await Rooms.findOne({ _id: rid }));

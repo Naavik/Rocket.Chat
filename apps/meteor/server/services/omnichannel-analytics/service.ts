@@ -140,7 +140,14 @@ export class OmnichannelAnalyticsService extends ServiceClassInternal implements
 	}
 
 	async getAnalyticsOverviewData(options: AnalyticsOverviewDataOptions) {
-		const { departmentId, utcOffset = 0, language, daterange: { from: fDate, to: tDate } = {}, analyticsOptions: { name } = {}, executedBy } = options;
+		const {
+			departmentId,
+			utcOffset = 0,
+			language,
+			daterange: { from: fDate, to: tDate } = {},
+			analyticsOptions: { name } = {},
+			executedBy,
+		} = options;
 		const timezone = getTimezone({ utcOffset });
 		const from = moment
 			.tz(fDate || '', 'YYYY-MM-DD', timezone)

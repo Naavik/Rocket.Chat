@@ -25,16 +25,10 @@ type RegisterContactProps = {
 	};
 };
 
-export async function registerContact({
-	token,
-	name,
-	email = '',
-	phone,
-	username,
-	customFields = {},
-	contactManager,
-}: RegisterContactProps,
-	userId: string): Promise<string> {
+export async function registerContact(
+	{ token, name, email = '', phone, username, customFields = {}, contactManager }: RegisterContactProps,
+	userId: string,
+): Promise<string> {
 	if (!token || typeof token !== 'string') {
 		throw new MeteorError('error-invalid-contact-data', 'Invalid visitor token');
 	}

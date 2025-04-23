@@ -31,13 +31,15 @@ async function findDepartments(
 	return (
 		await LivechatDepartment.findEnabledWithAgentsAndBusinessUnit<
 			Pick<ILivechatDepartment, '_id' | 'name' | 'showOnRegistration' | 'showOnOfflineForm' | 'departmentsAllowedToForward'>
-		>(businessUnit, {
-			_id: 1,
-			name: 1,
-			showOnRegistration: 1,
-			showOnOfflineForm: 1,
-			departmentsAllowedToForward: 1,
-		},
+		>(
+			businessUnit,
+			{
+				_id: 1,
+				name: 1,
+				showOnRegistration: 1,
+				showOnOfflineForm: 1,
+				departmentsAllowedToForward: 1,
+			},
 			{ userId },
 		)
 	).toArray();
@@ -98,7 +100,9 @@ export function normalizeHttpHeaderData(headers: Headers = new Headers()): {
 	return { httpHeaders };
 }
 
-export async function settings({ businessUnit = '', userId }: { businessUnit?: string, userId?: string } = {}): Promise<Record<string, string | number | any>> {
+export async function settings({ businessUnit = '', userId }: { businessUnit?: string; userId?: string } = {}): Promise<
+	Record<string, string | number | any>
+> {
 	// Putting this ugly conversion while we type the livechat service
 	const initSettings = await getInitSettings();
 	const triggers = await findTriggers();

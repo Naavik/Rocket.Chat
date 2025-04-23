@@ -5,7 +5,15 @@ import type { FilterOperators } from 'mongodb';
 import { cbLogger } from './logger';
 import { getUnitsFromUser } from '../methods/getUnitsFromUserRoles';
 
-export const restrictQuery = async ({ originalQuery = {}, unitsFilter, userId }: { originalQuery?: FilterOperators<IOmnichannelRoom>, unitsFilter?: string[], userId?: string | null }) => {
+export const restrictQuery = async ({
+	originalQuery = {},
+	unitsFilter,
+	userId,
+}: {
+	originalQuery?: FilterOperators<IOmnichannelRoom>;
+	unitsFilter?: string[];
+	userId?: string | null;
+}) => {
 	const query = { ...originalQuery };
 
 	let userUnits = await getUnitsFromUser(userId);

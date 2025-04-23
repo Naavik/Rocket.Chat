@@ -40,12 +40,15 @@ API.v1.addRoute(
 		async post() {
 			const { name, description, dueTimeInMinutes } = this.bodyParams;
 
-			const newSla = await LivechatEnterprise.saveSLA(null, {
-				name,
-				description,
-				dueTimeInMinutes,
-			},
-				this.userId);
+			const newSla = await LivechatEnterprise.saveSLA(
+				null,
+				{
+					name,
+					description,
+					dueTimeInMinutes,
+				},
+				this.userId,
+			);
 
 			return API.v1.success({ sla: newSla });
 		},
@@ -88,12 +91,15 @@ API.v1.addRoute(
 			const { name, description, dueTimeInMinutes } = this.bodyParams;
 			const { slaId } = this.urlParams;
 
-			const updatedSla = await LivechatEnterprise.saveSLA(slaId, {
-				name,
-				description,
-				dueTimeInMinutes,
-			},
-				this.userId);
+			const updatedSla = await LivechatEnterprise.saveSLA(
+				slaId,
+				{
+					name,
+					description,
+					dueTimeInMinutes,
+				},
+				this.userId,
+			);
 
 			return API.v1.success({ sla: updatedSla });
 		},

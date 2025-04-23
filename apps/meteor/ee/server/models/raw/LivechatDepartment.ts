@@ -13,6 +13,7 @@ import type {
 	Db,
 	AggregationCursor,
 } from 'mongodb';
+
 import { getUnitsFromUser } from '../../../app/livechat-enterprise/server/methods/getUnitsFromUserRoles';
 
 declare module '@rocket.chat/model-typings' {

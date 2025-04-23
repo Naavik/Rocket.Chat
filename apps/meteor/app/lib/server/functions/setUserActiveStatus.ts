@@ -50,7 +50,12 @@ async function reactivateDirectConversations(userId: string) {
 	}
 }
 
-export async function setUserActiveStatus(userId: string, active: boolean, confirmRelinquish = false, executedBy?: string): Promise<boolean | undefined> {
+export async function setUserActiveStatus(
+	userId: string,
+	active: boolean,
+	confirmRelinquish = false,
+	executedBy?: string,
+): Promise<boolean | undefined> {
 	check(userId, String);
 	check(active, Boolean);
 

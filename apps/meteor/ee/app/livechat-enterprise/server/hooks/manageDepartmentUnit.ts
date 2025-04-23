@@ -26,12 +26,15 @@ export const manageDepartmentUnit = async ({ userId, departmentId, unitId }: { u
 	}
 
 	if (unitId) {
-		const unit = await LivechatUnit.findOneById(unitId, {
-			projection: { ancestors: 1 },
-		},
-		{
-			unitsFromUser: accessibleUnits
-		});
+		const unit = await LivechatUnit.findOneById(
+			unitId,
+			{
+				projection: { ancestors: 1 },
+			},
+			{
+				unitsFromUser: accessibleUnits,
+			},
+		);
 
 		if (!unit) {
 			return;

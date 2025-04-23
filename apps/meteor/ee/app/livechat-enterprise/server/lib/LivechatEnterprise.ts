@@ -148,7 +148,11 @@ export const LivechatEnterprise = {
 		return LivechatTag.createOrUpdateTag(_id, tagData, tagDepartments);
 	},
 
-	async saveSLA(_id: string | null, slaData: Pick<IOmnichannelServiceLevelAgreements, 'name' | 'description' | 'dueTimeInMinutes'>, executedBy: string) {
+	async saveSLA(
+		_id: string | null,
+		slaData: Pick<IOmnichannelServiceLevelAgreements, 'name' | 'description' | 'dueTimeInMinutes'>,
+		executedBy: string,
+	) {
 		const oldSLA = _id && (await OmnichannelServiceLevelAgreements.findOneById(_id, { projection: { dueTimeInMinutes: 1 } }));
 		const exists = await OmnichannelServiceLevelAgreements.findDuplicate(_id, slaData.name, slaData.dueTimeInMinutes);
 		if (exists) {

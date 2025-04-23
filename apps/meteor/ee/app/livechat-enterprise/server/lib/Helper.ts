@@ -304,7 +304,10 @@ export const updateQueueInactivityTimeout = async () => {
 	});
 };
 
-export const updateSLAInquiries = async (executedBy: string, sla?: Pick<IOmnichannelServiceLevelAgreements, '_id' | 'dueTimeInMinutes'>) => {
+export const updateSLAInquiries = async (
+	executedBy: string,
+	sla?: Pick<IOmnichannelServiceLevelAgreements, '_id' | 'dueTimeInMinutes'>,
+) => {
 	if (!sla) {
 		return;
 	}
