@@ -44,7 +44,8 @@ API.v1.addRoute(
 				name,
 				description,
 				dueTimeInMinutes,
-			});
+			},
+				this.userId);
 
 			return API.v1.success({ sla: newSla });
 		},
@@ -79,7 +80,7 @@ API.v1.addRoute(
 		async delete() {
 			const { slaId } = this.urlParams;
 
-			await LivechatEnterprise.removeSLA(slaId);
+			await LivechatEnterprise.removeSLA(this.userId, slaId);
 
 			return API.v1.success();
 		},
@@ -91,7 +92,8 @@ API.v1.addRoute(
 				name,
 				description,
 				dueTimeInMinutes,
-			});
+			},
+				this.userId);
 
 			return API.v1.success({ sla: updatedSla });
 		},

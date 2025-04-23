@@ -1,4 +1,4 @@
-import type { ILivechatDepartment, IOmnichannelBusinessUnit } from '@rocket.chat/core-typings';
+import type { ILivechatDepartment } from '@rocket.chat/core-typings';
 import { LivechatDepartment, LivechatUnit } from '@rocket.chat/models';
 
 import { hasAnyRoleAsync } from '../../../../../app/authorization/server/functions/hasRole';
@@ -26,7 +26,6 @@ export const manageDepartmentUnit = async ({ userId, departmentId, unitId }: { u
 	}
 
 	if (unitId) {
-		console.log('UnitId manageDepartmentUnit', unitId);
 		const unit = await LivechatUnit.findOneById(unitId, {
 			projection: { ancestors: 1 },
 		},

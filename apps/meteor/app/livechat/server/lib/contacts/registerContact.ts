@@ -33,7 +33,8 @@ export async function registerContact({
 	username,
 	customFields = {},
 	contactManager,
-}: RegisterContactProps): Promise<string> {
+}: RegisterContactProps,
+	userId: string): Promise<string> {
 	if (!token || typeof token !== 'string') {
 		throw new MeteorError('error-invalid-contact-data', 'Invalid visitor token');
 	}
@@ -98,7 +99,7 @@ export async function registerContact({
 
 	await LivechatVisitors.updateOne({ _id: visitorId }, updateUser);
 
-	const extraQuery = await callbacks.run('livechat.applyRoomRestrictions', {});
+	const extraQuery = await callbacks.run('livechat.applyRoomRestrictions', {}, undefined, userId);
 	const rooms: IOmnichannelRoom[] = await LivechatRooms.findByVisitorId(visitorId, {}, extraQuery).toArray();
 
 	if (rooms?.length) {

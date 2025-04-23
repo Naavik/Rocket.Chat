@@ -68,7 +68,7 @@ export async function findRoom(token: string, rid?: string): Promise<IOmnichanne
 	return LivechatRooms.findOneByIdAndVisitorToken(rid, token, fields);
 }
 
-export async function findOpenRoom(token: string, departmentId?: string): Promise<IOmnichannelRoom | undefined> {
+export async function findOpenRoom(token: string, departmentId?: string, callerId?: string): Promise<IOmnichannelRoom | undefined> {
 	const options = {
 		projection: {
 			departmentId: 1,
@@ -78,7 +78,7 @@ export async function findOpenRoom(token: string, departmentId?: string): Promis
 		},
 	};
 
-	const extraQuery = await callbacks.run('livechat.applyRoomRestrictions', {});
+	const extraQuery = await callbacks.run('livechat.applyRoomRestrictions', {}, undefined, callerId);
 	const rooms = departmentId
 		? await LivechatRooms.findOpenByVisitorTokenAndDepartmentId(token, departmentId, options, extraQuery).toArray()
 		: await LivechatRooms.findOpenByVisitorToken(token, options, extraQuery).toArray();

@@ -81,7 +81,6 @@ export class LivechatDepartmentEE extends LivechatDepartmentRaw implements ILive
 		if (!businessUnit) {
 			return super.findEnabledWithAgents<T>(projection);
 		}
-		console.log('UnitId findEnabledWithAgentsAndBusinessUnit', businessUnit, extra);
 		const unitsFromUser = await getUnitsFromUser(extra?.userId);
 		const unit = await LivechatUnit.findOneById(businessUnit, { projection: { _id: 1 } }, { unitsFromUser });
 		if (!unit) {
