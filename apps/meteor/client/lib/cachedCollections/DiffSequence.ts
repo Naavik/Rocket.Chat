@@ -58,7 +58,7 @@ export class DiffSequence {
 		else DiffSequence.diffQueryUnorderedChanges(oldResults as IdMap<T['_id'], T>, newResults as IdMap<T['_id'], T>, observer, options);
 	}
 
-	static diffQueryUnorderedChanges<T extends { _id: string }, TProjection extends T = T>(
+	private static diffQueryUnorderedChanges<T extends { _id: string }, TProjection extends T = T>(
 		oldResults: IdMap<T['_id'], T>,
 		newResults: IdMap<T['_id'], T>,
 		observer: Observer<T>,
@@ -96,7 +96,7 @@ export class DiffSequence {
 		}
 	}
 
-	static diffQueryOrderedChanges<T extends { _id: string }, TProjection extends T = T>(
+	private static diffQueryOrderedChanges<T extends { _id: string }, TProjection extends T = T>(
 		oldResults: T[],
 		newResults: T[],
 		observer: Observer<T>,
@@ -105,16 +105,16 @@ export class DiffSequence {
 		options = options || {};
 		const projectionFn = options.projectionFn || clone;
 
-		const newPresenceOfId: Record<string, boolean> = {};
+		const newPresenceOfId = new Set<T['_id']>();
 		newResults.forEach((doc) => {
-			if (newPresenceOfId[doc._id]) Meteor._debug('Duplicate _id in new_results');
-			newPresenceOfId[doc._id] = true;
+			if (newPresenceOfId.has(doc._id)) Meteor._debug('Duplicate _id in new_results');
+			newPresenceOfId.add(doc._id);
 		});
 
-		const oldIndexOfId: Record<string, number> = {};
+		const oldIndexOfId = new Map<T['_id'], number>();
 		oldResults.forEach((doc, i) => {
 			if (doc._id in oldIndexOfId) Meteor._debug('Duplicate _id in old_results');
-			oldIndexOfId[doc._id] = i;
+			oldIndexOfId.set(doc._id, i);
 		});
 
 		// ALGORITHM:
@@ -163,12 +163,12 @@ export class DiffSequence {
 		const ptrs = new Array(N);
 		// virtual sequence of old indices of new results
 		const oldIdxSeq = function (iNew: number): number {
-			return oldIndexOfId[newResults[iNew]._id];
+			return oldIndexOfId.get(newResults[iNew]._id)!;
 		};
 		// for each item in new_results, use it to extend a common subsequence
 		// of length j <= max_seq_len
 		for (let i = 0; i < N; i++) {
-			if (oldIndexOfId[newResults[i]._id] !== undefined) {
+			if (oldIndexOfId.get(newResults[i]._id) !== undefined) {
 				let j = maxSeqLen;
 				// this inner loop would traditionally be a binary search,
 				// but scanning backwards we will likely find a subseq to extend
@@ -200,7 +200,7 @@ export class DiffSequence {
 		unmoved.push(newResults.length);
 
 		oldResults.forEach((doc) => {
-			if (!newPresenceOfId[doc._id]) observer.removed?.(doc._id);
+			if (!newPresenceOfId.has(doc._id)) observer.removed?.(doc._id);
 		});
 
 		// for each group of things in the new_results that is anchored by an unmoved
@@ -222,7 +222,7 @@ export class DiffSequence {
 					observer.added?.(newDoc._id, fields);
 				} else {
 					// moved
-					oldDoc = oldResults[oldIndexOfId[newDoc._id]];
+					oldDoc = oldResults[oldIndexOfId.get(newDoc._id)!];
 					projectedNew = projectionFn(newDoc);
 					projectedOld = projectionFn(oldDoc);
 					fields = DiffSequence.makeChangedFields(projectedNew, projectedOld);
@@ -234,7 +234,7 @@ export class DiffSequence {
 			}
 			if (groupId) {
 				newDoc = newResults[endOfGroup];
-				oldDoc = oldResults[oldIndexOfId[newDoc._id]];
+				oldDoc = oldResults[oldIndexOfId.get(newDoc._id)!];
 				projectedNew = projectionFn(newDoc);
 				projectedOld = projectionFn(oldDoc);
 				fields = DiffSequence.makeChangedFields(projectedNew, projectedOld);
@@ -252,7 +252,7 @@ export class DiffSequence {
 	//   rightOnly: function (key, rightValue) {...},
 	//   both: function (key, leftValue, rightValue) {...},
 	// }
-	static diffObjects<TLeft, TRight>(
+	private static diffObjects<TLeft, TRight>(
 		left: Record<string, TLeft>,
 		right: Record<string, TRight>,
 		callbacks: {
@@ -274,32 +274,6 @@ export class DiffSequence {
 			Object.keys(right).forEach((key) => {
 				const rightValue = right[key];
 				if (!hasOwn.call(left, key)) {
-					callbacks.rightOnly!(key, rightValue);
-				}
-			});
-		}
-	}
-
-	static diffMaps<TLeft, TRight>(
-		left: Map<string, TLeft>,
-		right: Map<string, TRight>,
-		callbacks: {
-			leftOnly?: (key: string, leftValue: TLeft) => void;
-			rightOnly?: (key: string, rightValue: TRight) => void;
-			both?: (key: string, leftValue: TLeft, rightValue: TRight) => void;
-		},
-	): void {
-		left.forEach((leftValue, key) => {
-			if (right.has(key)) {
-				callbacks.both?.(key, leftValue, right.get(key)!);
-			} else {
-				callbacks.leftOnly?.(key, leftValue);
-			}
-		});
-
-		if (callbacks.rightOnly) {
-			right.forEach((rightValue, key) => {
-				if (!left.has(key)) {
 					callbacks.rightOnly!(key, rightValue);
 				}
 			});

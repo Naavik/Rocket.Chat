@@ -84,10 +84,6 @@ export class IdMap<TId, TValue> implements IIdMap<TId, TValue> {
 		return copy;
 	}
 
-	[Symbol.iterator](): IterableIterator<[TId, TValue]> {
-		return this._map.entries();
-	}
-
 	values(): IterableIterator<TValue> {
 		return this._map.values();
 	}

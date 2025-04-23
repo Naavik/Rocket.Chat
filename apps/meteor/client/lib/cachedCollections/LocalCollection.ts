@@ -21,7 +21,6 @@ import {
 	_isPlainObject,
 	_selectorIsId,
 	clone,
-	isEqual,
 } from './common';
 
 export type QueryId = `${number}` & { __brand: 'QueryId' };
@@ -179,8 +178,6 @@ interface ILocalCollection<T extends { _id: string }> {
 }
 
 export class LocalCollection<T extends { _id: string }> implements ILocalCollection<T> {
-	private readonly _docs = new IdMap<T['_id'], T>();
-
 	readonly _observeQueue = new SynchronousQueue();
 
 	next_qid = 1;
@@ -200,55 +197,45 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 	paused = false;
 
-	constructor(protected store: UseBoundStore<StoreApi<{ records: T[] }>>) {
-		this.find({}).observe({
-			added: (record) => {
-				store.setState((state) => ({ records: [...state.records, record] }));
-			},
-			changed: (record) => {
-				store.setState((state) => {
-					const records = [...state.records];
-					const index = records.findIndex((r) => r._id === record._id);
-					if (index !== -1) {
-						records[index] = { ...record };
-					}
-					return { records };
-				});
-			},
-			removed: (record) => {
-				store.setState((state) => ({
-					records: state.records.filter((r) => r._id !== record._id),
-				}));
-			},
-		});
-	}
+	constructor(protected store: UseBoundStore<StoreApi<{ records: T[] }>>) {}
 
 	private has(id: T['_id']) {
-		return this._docs.has(id);
+		return this.store.getState().records.some((record) => record._id === id);
 	}
 
 	private get(id: T['_id']) {
-		return this._docs.get(id);
+		return this.store.getState().records.find((record) => record._id === id);
 	}
 
 	all() {
-		return this._docs.values();
+		return this.store.getState().records;
 	}
 
 	count() {
-		return this._docs.size();
+		return this.store.getState().records.length;
 	}
 
 	set(doc: T) {
-		this._docs.set(doc._id, doc);
+		this.store.setState((state) => {
+			const records = [...state.records];
+			const index = records.findIndex((r) => r._id === doc._id);
+			if (index !== -1) {
+				records[index] = doc;
+			} else {
+				records.push(doc);
+			}
+			return { records };
+		});
 	}
 
 	delete(id: T['_id']) {
-		this._docs.remove(id);
+		this.store.setState((state) => ({
+			records: state.records.filter((record) => record._id !== id),
+		}));
 	}
 
 	clear() {
-		this._docs.clear();
+		this.store.setState({ records: [] });
 	}
 
 	claimNextQueryId() {
@@ -305,7 +292,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 	insert(doc: T, callback?: (error: Error | null, id: T['_id']) => void) {
 		doc = clone(doc);
 		const id = this.prepareInsert(doc);
-		const queriesToRecompute = [];
+		const queriesToRecompute = new Set<QueryId>();
 
 		// trigger live queries that match
 		for (const qid of this.getAllQueryIds()) {
@@ -319,7 +306,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 			if (matchResult.result) {
 				if (query.cursor.skip || query.cursor.limit) {
-					queriesToRecompute.push(qid);
+					queriesToRecompute.add(qid);
 				} else {
 					this._insertInResultsSync(query, doc);
 				}
@@ -341,7 +328,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 	async insertAsync(doc: T, callback?: (error: Error | null, id: T['_id']) => void) {
 		doc = clone(doc);
 		const id = this.prepareInsert(doc);
-		const queriesToRecompute: QueryId[] = [];
+		const queriesToRecompute = new Set<QueryId>();
 
 		// trigger live queries that match
 		for (const qid of this.getAllQueryIds()) {
@@ -355,7 +342,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 			if (matchResult.result) {
 				if (query.cursor.skip || query.cursor.limit) {
-					queriesToRecompute.push(qid);
+					queriesToRecompute.add(qid);
 				} else {
 					// eslint-disable-next-line no-await-in-loop
 					await this._insertInResultsAsync(query, doc);
@@ -415,16 +402,16 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 	prepareRemove(selector: Filter<T>) {
 		const matcher = new Matcher(selector);
-		const remove: T['_id'][] = [];
+		const remove = new Set<T['_id']>();
 
 		this._eachPossiblyMatchingDocSync(selector, (doc, id) => {
 			if (matcher.documentMatches(doc).result) {
-				remove.push(id);
+				remove.add(id);
 			}
 		});
 
-		const queriesToRecompute: QueryId[] = [];
-		const queryRemove: { qid: QueryId; doc: T }[] = [];
+		const queriesToRecompute = new Set<QueryId>();
+		const queryRemove = new Set<{ qid: QueryId; doc: T }>();
 
 		for (const removeId of remove) {
 			const removeDoc = this.get(removeId)!;
@@ -438,9 +425,9 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 				if (query.matcher.documentMatches(removeDoc).result) {
 					if (query.cursor.skip || query.cursor.limit) {
-						queriesToRecompute.push(qid);
+						queriesToRecompute.add(qid);
 					} else {
-						queryRemove.push({ qid, doc: removeDoc });
+						queryRemove.add({ qid, doc: removeDoc });
 					}
 				}
 			});
@@ -449,14 +436,14 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 			this.delete(removeId);
 		}
 
-		return { queriesToRecompute, queryRemove, remove };
+		return { queriesToRecompute: Array.from(queriesToRecompute), queryRemove: Array.from(queryRemove), remove: Array.from(remove) };
 	}
 
 	remove(selector: Filter<T>, callback?: (error: Error | null, result: number) => void) {
 		// Easy special case: if we're not calling observeChanges callbacks and
 		// we're not saving originals and we got asked to remove everything, then
 		// just empty everything directly.
-		if (this.paused && !this._savedOriginals && isEqual(selector, {})) {
+		if (this.paused && !this._savedOriginals && JSON.stringify(selector) === '{}') {
 			return this.clearResultQueries(callback);
 		}
 
@@ -492,7 +479,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		// Easy special case: if we're not calling observeChanges callbacks and
 		// we're not saving originals and we got asked to remove everything, then
 		// just empty everything directly.
-		if (this.paused && !this._savedOriginals && isEqual(selector, {})) {
+		if (this.paused && !this._savedOriginals && JSON.stringify(selector) === '{}') {
 			return this.clearResultQueries(callback);
 		}
 
@@ -761,7 +748,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		if (updateCount === 0 && (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).upsert) {
 			const doc = this._createUpsertDocument(selector, mod);
 			if (!doc._id && (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).insertedId) {
-				doc._id = (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).insertedId;
+				doc._id = (options as { multi?: boolean; upsert?: boolean; insertedId: T['_id']; _returnObject?: boolean }).insertedId;
 			}
 
 			insertedId = await this.insertAsync(doc);
@@ -824,12 +811,12 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 		const qidToOriginalResults = this.prepareUpdate(selector);
 
-		let recomputeQids: Record<QueryId, boolean> = {};
+		let recomputeQids = new Set<QueryId>();
 
 		let updateCount = 0;
 
 		this._eachPossiblyMatchingDocSync(selector, (doc, id) => {
-			const queryResult: any = matcher.documentMatches(doc);
+			const queryResult = matcher.documentMatches(doc);
 
 			if (queryResult.result) {
 				// XXX Should we save the original even if mod ends up being a no-op?
@@ -846,7 +833,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 			return true;
 		});
 
-		(Object.keys(recomputeQids) as QueryId[]).forEach((qid) => {
+		recomputeQids.forEach((qid) => {
 			const query = this.queries[qid];
 			if (query) {
 				this._recomputeResults(query, qidToOriginalResults[qid]);
@@ -861,7 +848,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		if (updateCount === 0 && (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).upsert) {
 			const doc = this._createUpsertDocument(selector, mod);
 			if (!doc._id && (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).insertedId) {
-				doc._id = (options as { multi?: boolean; upsert?: boolean; insertedId?: T['_id']; _returnObject?: boolean }).insertedId;
+				doc._id = (options as { multi?: boolean; upsert?: boolean; insertedId: T['_id']; _returnObject?: boolean }).insertedId;
 			}
 
 			this.insert(doc);
@@ -992,7 +979,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 	}
 
 	_getMatchedDocAndModify(doc: T) {
-		const matchedBefore: any = {};
+		const matchedBefore = new Map<QueryId, boolean>();
 
 		this.getAllQueryIds().forEach((qid) => {
 			const query = this.queries[qid];
@@ -1002,11 +989,11 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 			}
 
 			if (query.ordered) {
-				matchedBefore[qid] = query.matcher.documentMatches(doc).result;
+				matchedBefore.set(qid, query.matcher.documentMatches(doc).result);
 			} else {
 				// Because we don't support skip or limit (yet) in unordered queries, we
 				// can just do a direct lookup.
-				matchedBefore[qid] = (query.results as IdMap<T['_id'], T>).has(doc._id);
+				matchedBefore.set(qid, (query.results as IdMap<T['_id'], T>).has(doc._id));
 			}
 		});
 
@@ -1017,9 +1004,10 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		const matchedBefore = this._getMatchedDocAndModify(doc);
 
 		const oldDoc = clone(doc);
-		this._modify(doc, mod, { arrayIndices });
+		doc = this._modify(doc, mod, { arrayIndices });
+		this.set(doc);
 
-		const recomputeQids: Record<QueryId, boolean> = {};
+		const recomputeQids = new Set<QueryId>();
 
 		for (const qid of this.getAllQueryIds()) {
 			const query = this.queries[qid];
@@ -1030,7 +1018,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 			const afterMatch = query.matcher.documentMatches(doc);
 			const after = afterMatch.result;
-			const before = matchedBefore[qid];
+			const before = matchedBefore.get(qid);
 
 			if (query.cursor.skip || query.cursor.limit) {
 				// We need to recompute any query where the doc may have been in the
@@ -1041,7 +1029,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 				// in the output. So it's safe to skip recompute if neither before or
 				// after are true.)
 				if (before || after) {
-					recomputeQids[qid] = true;
+					recomputeQids.add(qid);
 				}
 			} else if (before && !after) {
 				this._removeFromResultsSync(query, doc);
@@ -1058,7 +1046,8 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		const matchedBefore = this._getMatchedDocAndModify(doc);
 
 		const oldDoc = clone(doc);
-		this._modify(doc, mod, { arrayIndices });
+		doc = this._modify(doc, mod, { arrayIndices });
+		this.set(doc);
 
 		const recomputeQids: Record<QueryId, boolean> = {};
 		for (const qid of this.getAllQueryIds()) {
@@ -1070,7 +1059,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 
 			const afterMatch = query.matcher.documentMatches(doc);
 			const after = afterMatch.result;
-			const before = matchedBefore[qid];
+			const before = matchedBefore.get(qid);
 
 			if (query.cursor.skip || query.cursor.limit) {
 				// We need to recompute any query where the doc may have been in the
@@ -1129,10 +1118,6 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 	}
 
 	recomputeAllResults() {
-		this.clear();
-		for (const record of this.store.getState().records) {
-			this.set({ ...record });
-		}
 		for (const query of Object.values(this.queries)) {
 			this._recomputeResults(query);
 		}
@@ -1186,7 +1171,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		const selectorDocument = populateDocumentWithQueryFields(selector);
 		const isModify = this._isModificationMod(modifier);
 
-		const newDoc: any = {};
+		let newDoc: Partial<T> = {};
 
 		if (selectorDocument._id) {
 			newDoc._id = selectorDocument._id;
@@ -1196,11 +1181,11 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		// This double _modify call is made to help with nested properties (see issue
 		// #8631). We do this even if it's a replacement for validation purposes (e.g.
 		// ambiguous id's)
-		this._modify(newDoc, { $set: selectorDocument });
-		this._modify(newDoc, modifier, { isInsert: true });
+		newDoc = this._modify(newDoc, { $set: selectorDocument });
+		newDoc = this._modify(newDoc, modifier, { isInsert: true });
 
 		if (isModify) {
-			return newDoc;
+			return newDoc as T;
 		}
 
 		// Replacement can take _id from query document
@@ -1209,21 +1194,21 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 			replacement._id = newDoc._id;
 		}
 
-		return replacement;
+		return replacement as T;
 	}
 
 	private _findInOrderedResults(query: Query<T, Options<T>, any>, doc: T): number {
 		if (!query.ordered) {
-			throw new Error("Can't call _findInOrderedResults on unordered query");
+			throw createMinimongoError("Can't call _findInOrderedResults on unordered query");
 		}
 
 		for (let i = 0; i < (query as OrderedQuery<T, Options<T>, T>).results.length; i++) {
-			if ((query as OrderedQuery<T, Options<T>, T>).results[i] === doc) {
+			if ((query as OrderedQuery<T, Options<T>, T>).results[i]._id === doc._id) {
 				return i;
 			}
 		}
 
-		throw new Error('object missing from query');
+		throw createMinimongoError('object missing from query');
 	}
 
 	// If this is a selector which explicitly constrains the match by ID to a finite
@@ -1362,12 +1347,12 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 		return i;
 	}
 
-	private _isModificationMod(mod: UpdateFilter<T>) {
+	private _isModificationMod(mod: UpdateFilter<T> | T) {
 		let isModify = false;
 		let isReplace = false;
 
 		Object.keys(mod).forEach((key) => {
-			if (key.substr(0, 1) === '$') {
+			if (key.slice(0, 1) === '$') {
 				isModify = true;
 			} else {
 				isReplace = true;
@@ -1393,7 +1378,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 	//   - isInsert is set when _modify is being called to compute the document to
 	//     insert as part of an upsert operation. We use this primarily to figure
 	//     out when to set the fields in $setOnInsert, if present.
-	private _modify(doc: T, modifier: UpdateFilter<T>, options: { isInsert?: boolean; arrayIndices?: unknown } = {}) {
+	private _modify<U extends Partial<T>>(doc: U, modifier: UpdateFilter<T>, options: { isInsert?: boolean; arrayIndices?: unknown } = {}) {
 		if (!_isPlainObject(modifier)) {
 			throw createMinimongoError('Modifier must be an object');
 		}
@@ -1455,19 +1440,7 @@ export class LocalCollection<T extends { _id: string }> implements ILocalCollect
 			assertHasValidFieldNames(modifier);
 		}
 
-		// move new document into place.
-		Object.keys(doc).forEach((key) => {
-			// Note: this used to be for (var key in doc) however, this does not
-			// work right in Opera. Deleting from a doc while iterating over it
-			// would sometimes cause opera to skip some keys.
-			if (key !== '_id') {
-				delete doc[key as keyof T];
-			}
-		});
-
-		Object.keys(newDoc).forEach((key) => {
-			doc[key as keyof T] = newDoc[key as keyof T];
-		});
+		return Object.freeze(newDoc);
 	}
 
 	private _removeFromResultsSync(query: Query<T, Options<T>, T>, doc: T) {
