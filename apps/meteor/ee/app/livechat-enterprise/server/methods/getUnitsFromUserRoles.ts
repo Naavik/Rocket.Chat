@@ -30,13 +30,13 @@ export const getUnitsFromUser = async (userId?: string): Promise<string[] | unde
 	if (!userId) {
 		return;
 	}
-	
+
 	if (!(await memoizedHasUnits())) {
 		return;
 	}
 
 	// TODO: we can combine these 2 calls into one single query
-	if ((await hasAnyRoleAsync(userId, ['admin', 'livechat-manager']))) {
+	if (await hasAnyRoleAsync(userId, ['admin', 'livechat-manager'])) {
 		return;
 	}
 
