@@ -26,7 +26,7 @@ async function hasUnits(): Promise<boolean> {
 // Units should't change really often, so we can cache the result
 const memoizedHasUnits = mem(hasUnits, { maxAge: process.env.TEST_MODE ? 1 : 10000 });
 
-export const getUnitsFromUser = async (userId?: string | null): Promise<string[] | undefined> => {
+export const getUnitsFromUser = async (userId?: string): Promise<string[] | undefined> => {
 	if (!(await memoizedHasUnits())) {
 		return;
 	}
